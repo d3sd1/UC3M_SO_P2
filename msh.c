@@ -412,11 +412,12 @@ int main(int argc, char *argv[]) {
             * DESCRIPTION: Error handler and special use cases.
             */
         else {
-            int pid, lStatus, in;
-            int fileHandler = 0;
             int n = command_counter;
             int fd[2];
+            int pid, status2;
+            int fileHandler=0;
 
+            int in;
 
             if ((in = dup(0)) < 0) {
                 perror("Error duplicating descriptor.\n");
@@ -424,49 +425,34 @@ int main(int argc, char *argv[]) {
             }
 
             for (int i = 0; i < n; i++) {
-                /**
-                * BEGIN BLOCK: COMMON_ERROR_HANDLER_PIPE
-                * DESCRIPTION: CREATE NEXT PIPE, IF NOT LATEST.
-                */
+                // CREATE NEXT PIPE
                 if (i != n - 1) {
                     if (pipe(fd) < 0) {
                         perror("Pipe error.\n");
                         exit(0);
                     }
                 }
-                /**
-                * END BLOCK: COMMON_ERROR_HANDLER_PIPE
-                */
 
-                /**
-                * BEGIN BLOCK: COMMON_ERROR_HANDLER_NEXT
-                * DESCRIPTION: CREATE NEXT PROCESS.
-                */
+                // NEXT PROCESS
                 switch (pid = fork()) {
 
-                    /**
-                    * BEGIN BLOCK: COMMON_ERROR_HANDLER_NEXT_CASE_ERR
-                    * DESCRIPTION: TYPE IS ERROR.
-                    */
                     case -1:
-                        perror("Fork error.\n");
-                        if ((close(fd[0])) < 0 || (close(fd[1])) < 0) {
+                        perror("Error while forking.\n");
+
+                        if((close(fd[0])) <0){
+                            perror("Error closing descriptor.\n");
+                            goto error;
+                        }
+                        if((close(fd[1])) <0){
                             perror("Error closing descriptor.\n");
                             goto error;
                         }
                         exit(0);
-                    /**
-                    * END BLOCK: COMMON_ERROR_HANDLER_NEXT_CASE_ERR
-                    */
-
-                    /**
-                    * BEGIN BLOCK: COMMON_ERROR_HANDLER_NEXT_CASE_CHILD
-                    * DESCRIPTION: TYPE IS CHILD. INPUT IS FROM PREVIOUS CHILD.
-                    */
+                    // CHILD NESTED CALLS
                     case 0:
-                        // IF NOT FIRST OR LAST, PIPE IS AN ERROR.
+                        // HALF PROCESS ERROR REDIR
                         if (strcmp(filev[2], "0") != 0) {
-                            if ((close(2)) < 0) {
+                            if((close(2)) <0){
                                 perror("Error closing descriptor.\n");
                                 goto error;
                             }
@@ -478,7 +464,7 @@ int main(int argc, char *argv[]) {
                         }
 
                         if (i == 0 && strcmp(filev[0], "0") != 0) {
-                            if ((close(0)) < 0) {
+                            if((close(0)) <0){
                                 perror("Error closing descriptor.\n");
                                 goto error;
                             }
@@ -487,29 +473,43 @@ int main(int argc, char *argv[]) {
                                 goto error;
                             }
                         } else {
+                            if((close(0)) <0){
+                                perror("Error closing descriptor.\n");
+                                goto error;
+                            }
                             if (dup(in) < 0) {
                                 perror("Error duplicating descriptor.\n");
                                 goto error;
                             }
-                            if ((close(0)) < 0 ||(close(in)) < 0) {
+                            if((close(in)) <0){
                                 perror("Error closing descriptor.\n");
                                 goto error;
                             }
                         }
 
-                        // CLOSE STANTARD OUTPUT IF NOT LATEST PROCESS.
+                        // CLOSE POUT IF NOT LATEST PROCESS.
                         if (i != n - 1) {
+
+                            if((close(1)) <0){
+                                perror("Error closing descriptor.\n");
+                                goto error;
+                            }
+
                             if (dup(fd[1]) < 0) {
                                 perror("Error duplicating descriptor.\n");
                                 goto error;
                             }
-                            if ((close(1)) < 0 || (close(fd[0])) < 0 || (close(fd[1])) < 0) {
+                            if((close(fd[0])) <0){
+                                perror("Error closing descriptor.\n");
+                                goto error;
+                            }
+                            if((close(fd[1])) <0){
                                 perror("Error closing descriptor.\n");
                                 goto error;
                             }
                         } else {
                             if (strcmp(filev[1], "0") != 0) {
-                                if ((close(1)) < 0) {
+                                if((close(1)) <0){
                                     perror("Error closing descriptor.\n");
                                     goto error;
                                 }
@@ -532,50 +532,38 @@ int main(int argc, char *argv[]) {
                         }
                         break;
 
-                    /**
-                    * END BLOCK: COMMON_ERROR_HANDLER_NEXT_CASE_CHILD
-                    */
-
-                    /**
-                    * BEGIN BLOCK: COMMON_ERROR_HANDLER_NEXT_CASE_PARENT
-                    * DESCRIPTION: TYPE IS PARENT. PARENT GIVES VALUE TO CHILD (IF NOT LATEST PROCESS).
-                    */
+                    // PARENT PROCESS -> GIVES IN TO CHILDS (IF NOT LATEST)
                     default:
-                        if ((close(in)) < 0) {
+                        if((close(in)) <0){
                             perror("Error closing descriptor.\n");
                             goto error;
-                        }
-                        if (i != n - 1) {
-                            if ((in = dup(fd[0])) < 0) {
-                                perror("Error al duplicar descriptor\n");
-                                goto error;
-                            }
-                            if (dup(fd[0]) < 0) {
-                                perror("Error duplicating descriptor.\n");
-                                goto error;
-                            }
-                            if ((close(fd[1])) < 0) {
-                                perror("Error closing descriptor.\n");
-                                goto error;
-                            }
-
-                        }
-                    /**
-                    * END BLOCK: COMMON_ERROR_HANDLER_NEXT_CASE_PARENT
-                    */
+                        }                      if (i != n - 1) {
+                    if ((in = dup(fd[0])) < 0) {
+                        perror("Error duplicating descriptor.\n");
+                        goto error;
+                    }
+                    if (dup(fd[0]) < 0) {
+                        perror("Error duplicating descriptor.\n");
+                        goto error;
+                    }
+                    if((close(fd[1])) <0){
+                        perror("Error closing descriptor.\n");
+                        goto error;
+                    }
                 }
-                /**
-                * END BLOCK: COMMON_ERROR_HANDLER_NEXT
-                */
+                }
             }
-            if (fileHandler != 0 && (close(fileHandler)) < 0) {
-                perror("Error closing file descriptor.\n");
-                goto error;
+            if(fileHandler!=0){
+                if((close(fileHandler)) <0){
+                    perror("Error closing descriptor.\n");
+                    goto error;
+                }
             }
+            // AFTER LOOP IS FINISHED, THE FIRST PROCESS WAITS FOR LATEST, AND THEN AWAKENS 'EM ALL
             if (!isBackground) {
-                while (wait(&lStatus) > 0);
+                while (wait(&status2) > 0);
                 if (stat < 0) {
-                    perror("Error executing child.\n");
+                    perror("Child error.\n");
                 }
             }
         }
